@@ -28,10 +28,25 @@ public class QRFromServer : MonoBehaviour
         StartCoroutine(DownloadAndSet(url));
     }
 
+    // Call this to request a QR for an arbitrary full URL via backend (/qr?url=...)
+    public void GenerateForUrl(string targetUrl)
+    {
+        if (string.IsNullOrEmpty(targetUrl))
+        {
+            Debug.LogWarning("QRFromServer: targetUrl is empty");
+            return;
+        }
+        var url = backendHost.TrimEnd('/') + $"/qr?url={UnityWebRequest.EscapeURL(targetUrl)}";
+        StartCoroutine(DownloadAndSet(url));
+    }
+
     // If joinCode set in inspector, auto-generate on Start
     private void Start()
     {
-        if (!string.IsNullOrEmpty(joinCode.ToString())) GenerateForRoom(joinCode.ToString());
+        if (joinCode != null && !string.IsNullOrEmpty(joinCode.text))
+        {
+            GenerateForRoom(joinCode.text);
+        }
     }
 
     private IEnumerator DownloadAndSet(string url)
