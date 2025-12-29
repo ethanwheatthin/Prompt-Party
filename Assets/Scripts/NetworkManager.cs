@@ -13,7 +13,7 @@ public class NetworkManager : MonoBehaviour
     public static NetworkManager Instance { get; private set; }
 
     [Header("WebSocket")]
-    public string serverUrl = "ws://localhost:8080"; // change to wss://... in production
+    public string serverUrl = "ws://localhost:3000"; // change to wss://... in production
     private NativeWebSocket.WebSocket websocket;
 
     public bool IsConnected => websocket != null && websocket.State == NativeWebSocket.WebSocketState.Open;

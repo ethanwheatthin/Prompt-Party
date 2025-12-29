@@ -19,7 +19,7 @@ export type Room = {
 const rooms = new Map<string, Room>();
 const joinCodeIndex = new Map<string, string>();
 
-function genJoinCode() {
+export function genJoinCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
   for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
@@ -76,7 +76,7 @@ function broadcastRoomState(roomId: string) {
   if (!room) return;
   const state = getRoomStateForClient(roomId);
   room.players.forEach((p) => {
-    if (p.socket && p.socket.readyState === p.socket.OPEN) {
+    if (p.socket && p.socket.readyState === WebSocket.OPEN) {
       p.socket.send(JSON.stringify({ type: 'room_state', payload: state }));
     }
   });
