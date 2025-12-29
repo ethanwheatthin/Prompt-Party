@@ -1,0 +1,26 @@
+{
+  "name": "prompt-party-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "@fastify/websocket": "^8.0.0",
+    "fastify": "^4.22.0",
+    "jsonwebtoken": "^9.0.0",
+    "dotenv": "^16.0.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^0.34.0",
+    "@types/jsonwebtoken": "^9.0.0",
+    "@types/node": "^18.0.0",
+    "@types/uuid": "^9.0.0"
+  }
+}
