@@ -13,7 +13,12 @@ public class NetworkManager : MonoBehaviour
     public static NetworkManager Instance { get; private set; }
 
     [Header("WebSocket")]
-    public string serverUrl = "ws://localhost:3000"; // change to wss://... in production
+    // backend WS endpoint includes the /ws path
+    public string serverUrl = "ws://localhost:3000/ws"; // change to wss://... in production
+    // paste token here in the inspector for convenience in the editor
+    [Header("Auth")]
+    public string authToken = "";
+
     private NativeWebSocket.WebSocket websocket;
 
     public bool IsConnected => websocket != null && websocket.State == NativeWebSocket.WebSocketState.Open;
@@ -37,13 +42,18 @@ public class NetworkManager : MonoBehaviour
             await Close();
         }
 
+        Debug.Log($"[Network] Connecting to {serverUrl}");
         websocket = new WebSocket(serverUrl);
 
         websocket.OnOpen += () =>
         {
             Debug.Log("[Network] WebSocket opened.");
-            // Example: send auth after opening if you have a token
-            // SendAuth("dev-jwt-token");
+            // auto-send auth if provided (editor convenience)
+            if (!string.IsNullOrEmpty(authToken))
+            {
+                Debug.Log("[Network] Sending auth token from inspector...");
+                _ = SendAuth(authToken);
+            }
         };
 
         websocket.OnError += (e) =>

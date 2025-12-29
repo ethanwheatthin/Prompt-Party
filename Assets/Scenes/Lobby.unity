@@ -285,7 +285,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6cce7b6d587ee644faa5e4d8fac926d9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NetworkManager
-  serverUrl: ws://localhost:8080
+  serverUrl: ws://localhost:3000/ws
+  authToken: 
 --- !u!4 &571331842
 Transform:
   m_ObjectHideFlags: 0
@@ -1017,7 +1018,7 @@ MonoBehaviour:
   createRoomUrl: http://localhost:3000/rooms
   createRoomButton: {fileID: 677484940}
   feedbackText: {fileID: 2108533673}
-  createRoomOnStart: 1
+  createRoomOnStart: 0
 --- !u!4 &2090740940
 Transform:
   m_ObjectHideFlags: 0

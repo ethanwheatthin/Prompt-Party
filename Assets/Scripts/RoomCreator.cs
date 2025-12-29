@@ -89,7 +89,7 @@ public class RoomCreator : MonoBehaviour
                 // set token in NetworkManager (so it will send auth when socket opens)
                 if (NetworkManager.Instance != null)
                 {
-                    //NetworkManager.Instance.authToken = token;
+                    NetworkManager.Instance.authToken = token;
                     // ensure WebSocket connects (it may already be connected)
                     _ = NetworkManager.Instance.Connect();
                 }

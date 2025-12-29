@@ -75,8 +75,15 @@ function broadcastRoomState(roomId: string) {
   const room = rooms.get(roomId);
   if (!room) return;
   const state = getRoomStateForClient(roomId);
+
+  // best-effort logging to stdout to help debug when fastify logger not available
+  try {
+    // eslint-disable-next-line no-console
+    console.log(`[roomManager] broadcasting room_state for room=${roomId} players=${room.players.length}`);
+  } catch (e) {}
+
   room.players.forEach((p) => {
-    if (p.socket && p.socket.readyState === WebSocket.OPEN) {
+    if (p.socket && p.socket.readyState === p.socket.OPEN) {
       p.socket.send(JSON.stringify({ type: 'room_state', payload: state }));
     }
   });
