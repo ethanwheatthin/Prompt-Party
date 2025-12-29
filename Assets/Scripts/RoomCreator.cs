@@ -17,6 +17,10 @@ public class RoomCreator : MonoBehaviour
     [Header("Behavior")]
     public bool createRoomOnStart = true;
 
+    [Header("QR")]
+    public QRFromServer qrFetcher; // optional: assign to display backend-generated QR
+    public string backendHost = "http://localhost:3000";
+
     private void Start()
     {
         if (createRoomButton != null)
@@ -97,6 +101,13 @@ public class RoomCreator : MonoBehaviour
                 if (feedbackText != null)
                 {
                     feedbackText.text = string.IsNullOrEmpty(joinCode) ? "Room created" : $"Room: {joinCode}";
+                }
+
+                // generate QR via backend and show in UI if qrFetcher assigned
+                if (qrFetcher != null && !string.IsNullOrEmpty(joinCode))
+                {
+                    qrFetcher.backendHost = backendHost;
+                    qrFetcher.GenerateForRoom(joinCode);
                 }
             }
         }

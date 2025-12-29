@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { WebSocket, RawData } from 'ws';
 import jwt from 'jsonwebtoken';
-import { getRoomStateForClient, attachSocketToRoom, rooms } from '../lib/roomManager';
+import { getRoomStateForClient, attachSocketToRoom, rooms, broadcastRoomState } from '../lib/roomManager';
 
 export function setupWebsocket(app: FastifyInstance) {
   app.get('/ws', { websocket: true } as any, (connection, req) => {
@@ -27,6 +27,8 @@ export function setupWebsocket(app: FastifyInstance) {
             const authOk = { type: 'auth_ok', payload: { playerId: payload.playerId, roomState } };
             ws.send(JSON.stringify(authOk));
             app.log.debug(`Sent auth_ok to ${remoteAddr} for player ${payload.playerId}`);
+            // broadcast updated room_state to all connected sockets in the room
+            try { broadcastRoomState(payload.roomId); } catch (e) { app.log.error(`Failed to broadcast after auth: ${e}`); }
           } catch (e: any) {
             app.log.warn(`WS auth failed from ${remoteAddr}: ${e.message}`);
             ws.send(JSON.stringify({ type: 'auth_error', payload: { error: e.message } }));
@@ -39,11 +41,15 @@ export function setupWebsocket(app: FastifyInstance) {
 
     ws.on('close', (code, reason) => {
       app.log.info(`WS closed ${remoteAddr} code=${code} reason=${reason}`);
-      // remove socket references from any players in rooms
+      // remove socket references from any players in rooms and broadcast updates
       try {
         for (const [roomId, room] of rooms) {
+          let changed = false;
           for (const p of room.players) {
-            if (p.socket === ws) p.socket = null;
+            if (p.socket === ws) { p.socket = null; changed = true; }
+          }
+          if (changed) {
+            try { broadcastRoomState(roomId); } catch (e) { app.log.error(`Failed to broadcast on close: ${e}`); }
           }
         }
       } catch (err) {
