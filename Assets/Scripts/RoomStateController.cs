@@ -81,7 +81,6 @@ public class RoomStateController : MonoBehaviour
             if (playerListItemPrefab == null || playersListContent == null) continue;
 
             var go = Instantiate(playerListItemPrefab, playersListContent);
-
             // prefer TextMeshPro if present
             var tmp = go.GetComponentInChildren<TextMeshProUGUI>();
             if (tmp != null)
