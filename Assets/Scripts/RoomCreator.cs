@@ -13,6 +13,8 @@ public class RoomCreator : MonoBehaviour
     [Header("UI")]
     public UnityEngine.UI.Button createRoomButton;
     public UnityEngine.UI.Text feedbackText;
+    public UnityEngine.UI.Text altText;
+
 
     [Header("Behavior")]
     public bool createRoomOnStart = true;
@@ -101,6 +103,7 @@ public class RoomCreator : MonoBehaviour
                 if (feedbackText != null)
                 {
                     feedbackText.text = string.IsNullOrEmpty(joinCode) ? "Room created" : $"Room: {joinCode}";
+                    altText.text = string.IsNullOrEmpty(joinCode) ? "" : $"{joinCode}";
                 }
 
                 // generate QR via backend and show in UI if qrFetcher assigned
