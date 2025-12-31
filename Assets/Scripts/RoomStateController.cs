@@ -1,6 +1,8 @@
 ﻿using System;
 using UnityEngine;
 using UnityEngine.UI;
+using Newtonsoft.Json.Linq;
+using TMPro;
 
 public class RoomStateController : MonoBehaviour
 {
@@ -8,6 +10,10 @@ public class RoomStateController : MonoBehaviour
 
     [Header("UI References")]
     public Text roomCodeText;
+
+    [Header("Player List UI")]
+    public GameObject playerListItemPrefab; // prefab with a Text component
+    public Transform playersListContent; // parent transform for instantiated rows
 
     private void Awake()
     {
@@ -37,6 +43,64 @@ public class RoomStateController : MonoBehaviour
         if (roomCodeText != null)
         {
             roomCodeText.text = $"Room: {joinCode}";
+        }
+    }
+
+    // Accept a room state JSON object (payload from server) and update UI
+    public void UpdateRoomState(JObject roomState)
+    {
+        if (roomState == null) return;
+
+        // update join code UI
+        var joinCode = roomState.Value<string>("joinCode") ?? roomState.Value<string>("roomId");
+        if (!string.IsNullOrEmpty(joinCode)) SetJoinCode(joinCode);
+
+        // update players list
+        var players = roomState["players"] as JArray;
+        if (players == null) return;
+
+        // clear existing list items
+        if (playersListContent != null)
+        {
+            for (int i = playersListContent.childCount - 1; i >= 0; i--)
+            {
+                var child = playersListContent.GetChild(i);
+                Destroy(child.gameObject);
+            }
+        }
+
+        // instantiate a new item for each player (skip host)
+        foreach (var p in players)
+        {
+            var name = p.Value<string>("name") ?? "Player";
+            var isHost = p.Value<bool?>("isHost") ?? false;
+
+            // skip showing the Unity host in the players list
+            if (isHost) continue;
+
+            if (playerListItemPrefab == null || playersListContent == null) continue;
+
+            var go = Instantiate(playerListItemPrefab, playersListContent);
+
+            // prefer TextMeshPro if present
+            var tmp = go.GetComponentInChildren<TextMeshProUGUI>();
+            if (tmp != null)
+            {
+                tmp.text = name;
+                continue;
+            }
+
+            // fallback to legacy UI Text
+            var txt = go.GetComponentInChildren<Text>();
+            if (txt != null)
+            {
+                txt.text = name;
+            }
+            else
+            {
+                // fallback: set GameObject name
+                go.name = name;
+            }
         }
     }
 }

@@ -1,4 +1,4 @@
-using NativeWebSocket;
+ï»¿using NativeWebSocket;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
@@ -113,7 +113,7 @@ public class NetworkManager : MonoBehaviour
         }
         catch (Exception e)
         {
-            Debug.LogWarning($"[Network] Invalid JSON: {e.Message} — raw: {json}");
+            Debug.LogWarning($"[Network] Invalid JSON: {e.Message} ï¿½ raw: {json}");
             return;
         }
 
@@ -133,17 +133,25 @@ public class NetworkManager : MonoBehaviour
         {
             case "auth_ok":
                 // payload: { playerId, roomState }
-                var roomState = payload?["roomState"];
+                var roomState = payload?["roomState"] as JObject;
                 if (roomState != null)
                 {
                     var joinCode = roomState.Value<string>("joinCode") ?? roomState.Value<string>("roomId");
                     if (!string.IsNullOrEmpty(joinCode)) RoomStateController.Instance?.SetJoinCode(joinCode);
+                    // forward entire state to UI controller
+                    RoomStateController.Instance?.UpdateRoomState(roomState);
                 }
                 break;
             case "room_state":
                 // payload is the roomState
-                var join = payload?.Value<string>("joinCode") ?? payload?.Value<string>("roomId");
-                if (!string.IsNullOrEmpty(join)) RoomStateController.Instance?.SetJoinCode(join);
+                var roomStatePayload = payload as JObject;
+                if (roomStatePayload != null)
+                {
+                    var join = roomStatePayload.Value<string>("joinCode") ?? roomStatePayload.Value<string>("roomId");
+                    if (!string.IsNullOrEmpty(join)) RoomStateController.Instance?.SetJoinCode(join);
+                    // forward entire state to UI controller
+                    RoomStateController.Instance?.UpdateRoomState(roomStatePayload);
+                }
                 break;
             default:
                 // other message types (round_started, cut_vote_update, etc.) are ignored by UI controller
