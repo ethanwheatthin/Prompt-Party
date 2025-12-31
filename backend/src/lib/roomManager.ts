@@ -49,7 +49,7 @@ export function joinRoom(joinCode: string, name: string) {
   room.players.push(player);
   const token = jwt.sign({ roomId, playerId, role: 'player' }, process.env.JWT_SECRET || 'dev-secret', { expiresIn: '24h' });
   broadcastRoomState(roomId);
-  return { playerId, token, roomId };
+  return { playerId, token, roomId, joinCode: room.joinCode };
 }
 
 export function attachSocketToRoom(roomId: string, playerId: string, socket: WebSocket) {
@@ -71,7 +71,7 @@ export function getRoomStateForClient(roomId: string) {
   };
 }
 
-function broadcastRoomState(roomId: string) {
+export function broadcastRoomState(roomId: string) {
   const room = rooms.get(roomId);
   if (!room) return;
   const state = getRoomStateForClient(roomId);

@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PromptParty � Join</title>
+  <style>
+    html,body{height:100%;margin:0;font-family:system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial}
+    body{display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#667eea,#764ba2);padding:20px}
+    .card{background:linear-gradient(180deg,rgba(255,255,255,0.95),rgba(255,255,255,0.9));width:100%;max-width:420px;border-radius:12px;padding:20px;box-shadow:0 10px 30px rgba(0,0,0,0.2)}
+    h1{margin:0 0 12px;font-size:20px;text-align:center}
+    label{display:block;margin-top:8px;font-size:13px;color:#333}
+    input[type=text]{width:100%;padding:12px 10px;margin-top:6px;border-radius:8px;border:1px solid #ddd;font-size:16px}
+    .muted{font-size:12px;color:#666;margin-top:6px}
+    button{width:100%;margin-top:16px;padding:12px;border-radius:10px;border:0;background:#5a67d8;color:white;font-weight:600;font-size:16px}
+    .error{color:#b00020;background:#fff0f2;padding:8px;border-radius:8px;margin-top:12px}
+    .success{color:#064e3b;background:#ecfdf5;padding:8px;border-radius:8px;margin-top:12px}
+    ul{list-style:none;padding:0;margin:10px 0}
+    li{padding:8px;border-radius:8px;background:#f7f7fb;margin-bottom:8px;display:flex;align-items:center}
+    .dot{width:10px;height:10px;border-radius:50%;margin-right:8px}
+    .dot.online{background:#16a34a}
+    .dot.offline{background:#9ca3af}
+    .small{font-size:13px;color:#444}
+    .center{text-align:center}
+  </style>
+</head>
+<body>
+  <div class="card" role="main">
+    <h1>Join PromptParty</h1>
+    <div id="formArea">
+      <label for="joinCode">Room Code</label>
+      <input id="joinCode" type="text" maxlength="10" inputmode="text" autocomplete="off" placeholder="ABC123" />
+
+      <label for="name">Player Name</label>
+      <input id="name" type="text" maxlength="20" autocomplete="name" placeholder="Your name" />
+
+      <div class="muted">Enter the room code shown on the host's screen.</div>
+
+      <button id="joinBtn">Join Game</button>
+      <div id="message"></div>
+    </div>
+
+    <div id="lobbyArea" style="display:none">
+      <div class="center small">Connected to room <span id="roomCodeText"></span></div>
+      <div id="playersListContainer" style="margin-top:12px">
+        <ul id="playersList"></ul>
+      </div>
+      <div id="lobbyMessage" class="muted"></div>
+    </div>
+  </div>
+
+  <script>
+    (function(){
+      const joinCodeInput = document.getElementById('joinCode');
+      const nameInput = document.getElementById('name');
+      const joinBtn = document.getElementById('joinBtn');
+      const messageDiv = document.getElementById('message');
+      const formArea = document.getElementById('formArea');
+      const lobbyArea = document.getElementById('lobbyArea');
+      const roomCodeText = document.getElementById('roomCodeText');
+      const playersList = document.getElementById('playersList');
+      const lobbyMessage = document.getElementById('lobbyMessage');
+
+      let token = null;
+      let playerId = null;
+      let ws = null;
+
+      function setMessage(text, type){
+        messageDiv.innerHTML = '';
+        if(!text) return;
+        const div = document.createElement('div');
+        div.className = type === 'error' ? 'error' : 'success';
+        div.textContent = text;
+        messageDiv.appendChild(div);
+      }
+
+      function normalizeCode(code){
+        return (code||'').trim().toUpperCase();
+      }
+
+      joinCodeInput.addEventListener('input', (e)=>{
+        joinCodeInput.value = normalizeCode(joinCodeInput.value).slice(0,10);
+      });
+
+      async function joinRoom(){
+        setMessage('');
+        const joinCode = normalizeCode(joinCodeInput.value);
+        const name = (nameInput.value||'').trim().slice(0,20);
+        if(!joinCode){ setMessage('Please enter a room code', 'error'); return; }
+        if(!name){ setMessage('Please enter your name', 'error'); return; }
+
+        joinBtn.disabled = true;
+        joinBtn.textContent = 'Joining...';
+
+        try{
+          console.log(`Attempting join ${name} -> ${joinCode}`);
+          const res = await fetch('/join', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ joinCode, name }) });
+          if(res.status === 404){ setMessage('Room not found', 'error'); joinBtn.disabled = false; joinBtn.textContent = 'Join Game'; return; }
+          if(res.status === 400){ const body = await res.json(); setMessage(body.error || 'Bad request', 'error'); joinBtn.disabled = false; joinBtn.textContent = 'Join Game'; return; }
+          if(!res.ok){ setMessage('Network error', 'error'); joinBtn.disabled = false; joinBtn.textContent = 'Join Game'; return; }
+          const data = await res.json();
+          token = data.token;
+          playerId = data.playerId;
+          console.log(`Player ${name} joined room ${data.joinCode} as ${playerId}`);
+          setMessage('Joined room, connecting websocket...');
+          openWebSocket();
+          roomCodeText.textContent = data.joinCode || data.roomId;
+          formArea.style.display = 'none';
+          lobbyArea.style.display = '';
+        }catch(err){
+          console.error('Join failed', err);
+          setMessage('Network error while joining', 'error');
+        }finally{
+          joinBtn.disabled = false;
+          joinBtn.textContent = 'Join Game';
+        }
+      }
+
+      joinBtn.addEventListener('click', joinRoom);
+
+      function openWebSocket(){
+        const host = window.location.origin.replace(/^http/, 'ws');
+        ws = new WebSocket(host.replace(/^http/, 'ws') + '/ws');
+
+        ws.onopen = () => {
+          console.log('WebSocket opened');
+          setMessage('Connected, sending auth...');
+          ws.send(JSON.stringify({ type: 'auth', payload: { token } }));
+        };
+
+        ws.onmessage = (ev) => {
+          try{
+            const msg = JSON.parse(ev.data);
+            console.log('WS msg', msg);
+            if(msg.type === 'auth_ok'){
+              setMessage('Auth OK', 'success');
+              const roomState = msg.payload.roomState;
+              updatePlayers(roomState);
+              lobbyMessage.textContent = 'Lobby � waiting for host';
+            } else if(msg.type === 'room_state'){
+              updatePlayers(msg.payload);
+            } else if(msg.type === 'auth_error'){
+              setMessage('Auth error: ' + (msg.payload?.error || ''), 'error');
+            }
+          }catch(e){ console.error('Failed parsing ws message', e); }
+        };
+
+        ws.onclose = () => {
+          console.log('WebSocket closed');
+          lobbyMessage.textContent = 'Disconnected from server';
+          // mark all players offline
+          Array.from(playersList.children).forEach(li=>{ const dot = li.querySelector('.dot'); dot.classList.remove('online'); dot.classList.add('offline'); });
+        };
+
+        ws.onerror = (e) => {
+          console.error('WebSocket error', e);
+          setMessage('WebSocket error', 'error');
+        };
+      }
+
+      function updatePlayers(roomState){
+        if(!roomState) return;
+        playersList.innerHTML = '';
+        const players = roomState.players || [];
+        players.forEach(p=>{
+          const li = document.createElement('li');
+          const dot = document.createElement('div');
+          dot.className = 'dot ' + (p.id === playerId ? 'online' : 'online');
+          li.appendChild(dot);
+          const span = document.createElement('div');
+          span.innerHTML = `<div class=\"small\">${escapeHtml(p.name || p.id)}</div>`;
+          li.appendChild(span);
+          playersList.appendChild(li);
+        });
+      }
+
+      function escapeHtml(s){ return String(s).replace(/[&<>"']/g, (c)=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;" }[c])); }
+
+    })();
+  </script>
+</body>
+</html>
