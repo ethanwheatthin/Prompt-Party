@@ -103,7 +103,7 @@ public class RoomCreator : MonoBehaviour
                 if (feedbackText != null)
                 {
                     feedbackText.text = string.IsNullOrEmpty(joinCode) ? "Room created" : $"Room: {joinCode}";
-                    altText.text = string.IsNullOrEmpty(joinCode) ? "" : $"{joinCode}";
+                    altText.text = string.IsNullOrEmpty(joinCode) ? $"{joinCode}" : $"{joinCode}";
                 }
 
                 // generate QR via backend and show in UI if qrFetcher assigned
