@@ -23,6 +23,9 @@ public class NetworkManager : MonoBehaviour
 
     public bool IsConnected => websocket != null && websocket.State == NativeWebSocket.WebSocketState.Open;
 
+    // Store current round data
+    private JObject currentRoundData;
+
     private void Awake()
     {
         if (Instance != null && Instance != this) { Destroy(this.gameObject); return; }
@@ -153,8 +156,22 @@ public class NetworkManager : MonoBehaviour
                     RoomStateController.Instance?.UpdateRoomState(roomStatePayload);
                 }
                 break;
+            case "round_started":
+                // payload: { roundId, actorId, topic, startedAt, minCutoffAt, maxEndAt }
+                Debug.Log($"[Network] Round started! Topic: {payload?.Value<string>("topic")}");
+                currentRoundData = payload as JObject;
+                if (RoundStarter.Instance != null)
+                {
+                    RoundStarter.Instance.LoadRoundScene();
+                }
+                // If we're already in the round scene, update the controller
+                else if (RoundController.Instance != null)
+                {
+                    RoundController.Instance.SetRoundData(currentRoundData);
+                }
+                break;
             default:
-                // other message types (round_started, cut_vote_update, etc.) are ignored by UI controller
+                // other message types (cut_vote_update, etc.) are ignored by UI controller
                 Debug.Log($"[Network] Unhandled or UI-ignored message type {type}");
                 break;
         }
@@ -182,5 +199,10 @@ public class NetworkManager : MonoBehaviour
     public Task SendHostAction(string action, object payload = null)
     {
         return SendEnvelopeAsync("host_action", new { action, payload });
+    }
+
+    public JObject GetCurrentRoundData()
+    {
+        return currentRoundData;
     }
 }

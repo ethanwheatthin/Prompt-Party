@@ -47,6 +47,23 @@
       </div>
       <div id="lobbyMessage" class="muted"></div>
     </div>
+
+    <div id="roundArea" style="display:none">
+      <div class="center">
+        <h2 style="margin:10px 0">Round Topic</h2>
+        <div id="topicDisplay" style="font-size:18px;font-weight:600;margin:15px 0;color:#5a67d8"></div>
+        <div id="timerDisplay" style="font-size:24px;font-weight:700;margin:10px 0">1:30</div>
+        <div id="actorBanner" style="display:none;background:#fbbf24;padding:12px;border-radius:8px;margin:10px 0;font-weight:600">
+          You are the actor!
+        </div>
+      </div>
+      <div id="promptForm" style="margin-top:20px">
+        <label for="promptInput">Your Prompt</label>
+        <input id="promptInput" type="text" maxlength="100" placeholder="Enter your creative prompt..." />
+        <button id="submitPromptBtn">Submit Prompt</button>
+      </div>
+      <div id="promptMessage"></div>
+    </div>
   </div>
 
   <script>
@@ -57,13 +74,23 @@
       const messageDiv = document.getElementById('message');
       const formArea = document.getElementById('formArea');
       const lobbyArea = document.getElementById('lobbyArea');
+      const roundArea = document.getElementById('roundArea');
       const roomCodeText = document.getElementById('roomCodeText');
       const playersList = document.getElementById('playersList');
       const lobbyMessage = document.getElementById('lobbyMessage');
+      const topicDisplay = document.getElementById('topicDisplay');
+      const timerDisplay = document.getElementById('timerDisplay');
+      const actorBanner = document.getElementById('actorBanner');
+      const promptForm = document.getElementById('promptForm');
+      const promptInput = document.getElementById('promptInput');
+      const submitPromptBtn = document.getElementById('submitPromptBtn');
+      const promptMessage = document.getElementById('promptMessage');
 
       let token = null;
       let playerId = null;
       let ws = null;
+      let currentRound = null;
+      let timerInterval = null;
 
       function setMessage(text, type){
         messageDiv.innerHTML = '';
@@ -136,11 +163,13 @@
               setMessage('Auth OK', 'success');
               const roomState = msg.payload.roomState;
               updatePlayers(roomState);
-              lobbyMessage.textContent = 'Lobby � waiting for host';
+              lobbyMessage.textContent = 'Lobby – waiting for host';
             } else if(msg.type === 'room_state'){
               updatePlayers(msg.payload);
             } else if(msg.type === 'auth_error'){
               setMessage('Auth error: ' + (msg.payload?.error || ''), 'error');
+            } else if(msg.type === 'round_started'){
+              handleRoundStarted(msg.payload);
             }
           }catch(e){ console.error('Failed parsing ws message', e); }
         };
@@ -175,6 +204,75 @@
       }
 
       function escapeHtml(s){ return String(s).replace(/[&<>"']/g, (c)=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;" }[c])); }
+
+      function handleRoundStarted(roundData){
+        console.log('Round started:', roundData);
+        currentRound = roundData;
+        
+        // Hide lobby, show round
+        lobbyArea.style.display = 'none';
+        roundArea.style.display = '';
+        
+        // Display topic
+        topicDisplay.textContent = roundData.topic || 'Unknown topic';
+        
+        // Show/hide actor banner
+        if(roundData.actorId === playerId){
+          actorBanner.style.display = '';
+          promptForm.style.display = 'none';
+        } else {
+          actorBanner.style.display = 'none';
+          promptForm.style.display = '';
+        }
+        
+        // Start timer
+        startTimer(roundData.maxEndAt);
+      }
+
+      function startTimer(maxEndAt){
+        if(timerInterval) clearInterval(timerInterval);
+        
+        timerInterval = setInterval(()=>{
+          const now = Date.now();
+          const timeRemaining = maxEndAt - now;
+          
+          if(timeRemaining <= 0){
+            timerDisplay.textContent = '0:00';
+            clearInterval(timerInterval);
+            return;
+          }
+          
+          const seconds = Math.floor(timeRemaining / 1000);
+          const minutes = Math.floor(seconds / 60);
+          const secs = seconds % 60;
+          
+          timerDisplay.textContent = `${minutes}:${secs.toString().padStart(2, '0')}`;
+        }, 100);
+      }
+
+      submitPromptBtn.addEventListener('click', ()=>{
+        const prompt = promptInput.value.trim();
+        if(!prompt){
+          setPromptMessage('Please enter a prompt', 'error');
+          return;
+        }
+        
+        // TODO: Send prompt to server
+        console.log('Submitting prompt:', prompt);
+        submitPromptBtn.disabled = true;
+        submitPromptBtn.textContent = 'Submitted!';
+        promptInput.disabled = true;
+        setPromptMessage('Prompt submitted!', 'success');
+      });
+
+      function setPromptMessage(text, type){
+        promptMessage.innerHTML = '';
+        if(!text) return;
+        const div = document.createElement('div');
+        div.className = type === 'error' ? 'error' : 'success';
+        div.textContent = text;
+        promptMessage.appendChild(div);
+      }
 
     })();
   </script>
