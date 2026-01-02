@@ -63,6 +63,18 @@
         <button id="submitPromptBtn">Submit Prompt</button>
       </div>
       <div id="promptMessage"></div>
+      
+      <div id="votingArea" style="display:none;margin-top:20px">
+        <h3 style="text-align:center;margin-bottom:15px">Vote for the Best Prompt!</h3>
+        <div id="promptsList"></div>
+        <div id="votingMessage"></div>
+      </div>
+      
+      <div id="selectedPromptArea" style="display:none;margin-top:20px;text-align:center">
+        <h3 style="color:#16a34a">Winning Prompt!</h3>
+        <div id="selectedPromptText" style="font-size:18px;font-weight:600;padding:15px;background:#ecfdf5;border-radius:8px;margin:10px 0"></div>
+        <div id="selectedPromptAuthor" style="color:#666"></div>
+      </div>
     </div>
   </div>
 
@@ -85,12 +97,42 @@
       const promptInput = document.getElementById('promptInput');
       const submitPromptBtn = document.getElementById('submitPromptBtn');
       const promptMessage = document.getElementById('promptMessage');
+      const votingArea = document.getElementById('votingArea');
+      const promptsList = document.getElementById('promptsList');
+      const votingMessage = document.getElementById('votingMessage');
+      const selectedPromptArea = document.getElementById('selectedPromptArea');
+      const selectedPromptText = document.getElementById('selectedPromptText');
+      const selectedPromptAuthor = document.getElementById('selectedPromptAuthor');
 
       let token = null;
       let playerId = null;
       let ws = null;
       let currentRound = null;
       let timerInterval = null;
+      let hasVoted = false;
+
+      // Check for URL parameters for auto-join
+      function checkAutoJoin(){
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code');
+        const name = params.get('name');
+        const autoJoin = params.get('autoJoin');
+        
+        console.log('[AutoJoin] Checking URL params:', { code, name, autoJoin });
+        
+        if(code && name && autoJoin === 'true'){
+          joinCodeInput.value = code.toUpperCase();
+          nameInput.value = name;
+          console.log('[AutoJoin] Auto-joining with code:', code, 'name:', name);
+          // Auto-join after a short delay to ensure DOM is ready
+          setTimeout(()=>{
+            console.log('[AutoJoin] Triggering join...');
+            joinRoom();
+          }, 500);
+        } else {
+          console.log('[AutoJoin] Not auto-joining - missing params or autoJoin not true');
+        }
+      }
 
       function setMessage(text, type){
         messageDiv.innerHTML = '';
@@ -170,6 +212,32 @@
               setMessage('Auth error: ' + (msg.payload?.error || ''), 'error');
             } else if(msg.type === 'round_started'){
               handleRoundStarted(msg.payload);
+            } else if(msg.type === 'prompt_accepted'){
+              submitPromptBtn.disabled = true;
+              submitPromptBtn.textContent = 'Submitted!';
+              promptInput.disabled = true;
+              setPromptMessage('Prompt submitted successfully!', 'success');
+            } else if(msg.type === 'prompts_update'){
+              console.log('Prompts update received:', msg.payload);
+              // Could show prompt count or other info here
+            } else if(msg.type === 'voting_started'){
+              console.log('Voting started:', msg.payload);
+              handleVotingStarted(msg.payload);
+            } else if(msg.type === 'vote_accepted'){
+              console.log('Vote accepted');
+              hasVoted = true;
+              setVotingMessage('Vote submitted! Waiting for others...', 'success');
+            } else if(msg.type === 'vote_update'){
+              console.log('Vote update:', msg.payload);
+              // Could update vote counts in real-time
+            } else if(msg.type === 'prompt_selected'){
+              console.log('Prompt selected:', msg.payload);
+              handlePromptSelected(msg.payload);
+            } else if(msg.type === 'error'){
+              console.error('Server error:', msg.payload);
+              setPromptMessage(msg.payload?.error || 'Server error', 'error');
+              submitPromptBtn.disabled = false;
+              submitPromptBtn.textContent = 'Submit Prompt';
             }
           }catch(e){ console.error('Failed parsing ws message', e); }
         };
@@ -229,6 +297,118 @@
         startTimer(roundData.maxEndAt);
       }
 
+      function handleVotingStarted(roundData){
+        console.log('All prompts submitted, showing voting UI');
+        
+        // Hide prompt form if visible
+        promptForm.style.display = 'none';
+        
+        // If actor, just show waiting message
+        if(roundData.actorId === playerId){
+          actorBanner.style.display = '';
+          votingArea.style.display = 'none';
+          return;
+        }
+        
+        // Show voting area
+        votingArea.style.display = '';
+        
+        // Display prompts as vote buttons
+        promptsList.innerHTML = '';
+        const prompts = roundData.prompts || [];
+        
+        prompts.forEach(prompt => {
+          const promptCard = document.createElement('div');
+          promptCard.style.cssText = 'background:#f7f7fb;padding:15px;border-radius:8px;margin-bottom:10px;cursor:pointer;border:2px solid transparent;transition:all 0.2s';
+          
+          const promptText = document.createElement('div');
+          promptText.style.cssText = 'font-size:16px;font-weight:600;margin-bottom:5px';
+          promptText.textContent = prompt.text;
+          
+          const authorText = document.createElement('div');
+          authorText.style.cssText = 'font-size:12px;color:#666';
+          authorText.textContent = `by ${prompt.playerName}`;
+          
+          promptCard.appendChild(promptText);
+          promptCard.appendChild(authorText);
+          
+          // Don't allow voting for own prompt
+          if(prompt.playerId === playerId){
+            promptCard.style.opacity = '0.5';
+            promptCard.style.cursor = 'not-allowed';
+            authorText.textContent = 'by You (cannot vote for own)';
+          } else {
+            promptCard.addEventListener('click', ()=>{
+              if(hasVoted) return;
+              voteForPrompt(prompt.playerId, promptCard);
+            });
+            
+            promptCard.addEventListener('mouseenter', ()=>{
+              if(!hasVoted) promptCard.style.borderColor = '#5a67d8';
+            });
+            
+            promptCard.addEventListener('mouseleave', ()=>{
+              promptCard.style.borderColor = 'transparent';
+            });
+          }
+          
+          promptsList.appendChild(promptCard);
+        });
+      }
+
+      function voteForPrompt(promptPlayerId, cardElement){
+        if(hasVoted) return;
+        
+        console.log('Voting for prompt by:', promptPlayerId);
+        
+        if(ws && ws.readyState === WebSocket.OPEN){
+          ws.send(JSON.stringify({
+            type: 'submit_vote',
+            payload: { promptPlayerId }
+          }));
+          
+          // Visual feedback
+          cardElement.style.borderColor = '#16a34a';
+          cardElement.style.backgroundColor = '#ecfdf5';
+          setVotingMessage('Submitting vote...', 'success');
+        }
+      }
+
+      function setVotingMessage(text, type){
+        votingMessage.innerHTML = '';
+        if(!text) return;
+        const div = document.createElement('div');
+        div.className = type === 'error' ? 'error' : 'success';
+        div.textContent = text;
+        votingMessage.appendChild(div);
+      }
+
+      function handlePromptSelected(data){
+        console.log('Winning prompt selected:', data);
+        
+        // Hide voting area
+        votingArea.style.display = 'none';
+        actorBanner.style.display = 'none';
+        
+        // Show selected prompt
+        selectedPromptArea.style.display = '';
+        selectedPromptText.textContent = `"${data.promptText}"`;
+        selectedPromptAuthor.textContent = `by ${data.playerName} (${data.votes} vote${data.votes !== 1 ? 's' : ''})`;
+        
+        if(data.promptPlayerId === playerId){
+          selectedPromptAuthor.innerHTML += '<br><strong style="color:#16a34a">Your prompt won!</strong>';
+        }
+      }
+
+      function setPromptMessage(text, type){
+        promptMessage.innerHTML = '';
+        if(!text) return;
+        const div = document.createElement('div');
+        div.className = type === 'error' ? 'error' : 'success';
+        div.textContent = text;
+        promptMessage.appendChild(div);
+      }
+
       function startTimer(maxEndAt){
         if(timerInterval) clearInterval(timerInterval);
         
@@ -257,22 +437,22 @@
           return;
         }
         
-        // TODO: Send prompt to server
+        // Send prompt to server via WebSocket
         console.log('Submitting prompt:', prompt);
-        submitPromptBtn.disabled = true;
-        submitPromptBtn.textContent = 'Submitted!';
-        promptInput.disabled = true;
-        setPromptMessage('Prompt submitted!', 'success');
+        if(ws && ws.readyState === WebSocket.OPEN){
+          ws.send(JSON.stringify({
+            type: 'submit_prompt',
+            payload: { prompt }
+          }));
+          submitPromptBtn.disabled = true;
+          submitPromptBtn.textContent = 'Sending...';
+        } else {
+          setPromptMessage('Not connected to server', 'error');
+        }
       });
 
-      function setPromptMessage(text, type){
-        promptMessage.innerHTML = '';
-        if(!text) return;
-        const div = document.createElement('div');
-        div.className = type === 'error' ? 'error' : 'success';
-        div.textContent = text;
-        promptMessage.appendChild(div);
-      }
+      // Initialize - check for auto-join on page load
+      checkAutoJoin();
 
     })();
   </script>

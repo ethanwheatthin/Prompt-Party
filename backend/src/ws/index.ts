@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import jwt from 'jsonwebtoken';
-import { getRoomStateForClient, attachSocketToRoom, rooms, broadcastRoomState, startRound, getRoom } from '../lib/roomManager';
+import { getRoomStateForClient, attachSocketToRoom, rooms, broadcastRoomState, startRound, getRoom, submitPrompt, getRoundWithPrompts, submitVote, tallyVotes } from '../lib/roomManager';
 
 export function setupWebsocket(app: FastifyInstance) {
   app.get('/ws', { websocket: true } as any, (connection, req) => {
@@ -85,6 +85,113 @@ export function setupWebsocket(app: FastifyInstance) {
             }
           } else {
             app.log.warn(`Unknown host_action: ${action}`);
+          }
+        } else if (msg.type === 'submit_prompt') {
+          // Handle prompt submission from players
+          if (!authenticatedPayload) {
+            app.log.warn(`WS submit_prompt without auth from ${remoteAddr}`);
+            return ws.send(JSON.stringify({ type: 'error', payload: { error: 'not authenticated' } }));
+          }
+          
+          const promptText = msg.payload?.prompt;
+          if (!promptText || typeof promptText !== 'string') {
+            return ws.send(JSON.stringify({ type: 'error', payload: { error: 'invalid prompt' } }));
+          }
+          
+          try {
+            submitPrompt(authenticatedPayload.roomId, authenticatedPayload.playerId, promptText);
+            app.log.info(`Prompt submitted: playerId=${authenticatedPayload.playerId}, prompt=${promptText.substring(0, 30)}...`);
+            
+            // Send confirmation to the player
+            ws.send(JSON.stringify({ type: 'prompt_accepted', payload: { success: true } }));
+            
+            // Broadcast updated prompts to all players in the room (especially the host)
+            const room = getRoom(authenticatedPayload.roomId);
+            if (room) {
+              const roundData = getRoundWithPrompts(authenticatedPayload.roomId);
+              room.players.forEach((p) => {
+                if (p.socket && p.socket.readyState === p.socket.OPEN) {
+                  p.socket.send(JSON.stringify({
+                    type: 'prompts_update',
+                    payload: roundData
+                  }));
+                }
+              });
+              
+              // If all prompts submitted, send voting_started event
+              if (roundData?.allPromptsSubmitted) {
+                app.log.info(`All prompts submitted for room ${authenticatedPayload.roomId}, starting voting phase`);
+                room.players.forEach((p) => {
+                  if (p.socket && p.socket.readyState === p.socket.OPEN) {
+                    p.socket.send(JSON.stringify({
+                      type: 'voting_started',
+                      payload: roundData
+                    }));
+                  }
+                });
+              }
+            }
+          } catch (e: any) {
+            app.log.error(`Failed to submit prompt: ${e.message}`);
+            ws.send(JSON.stringify({ type: 'error', payload: { error: e.message } }));
+          }
+        } else if (msg.type === 'submit_vote') {
+          // Handle vote submission from players
+          if (!authenticatedPayload) {
+            app.log.warn(`WS submit_vote without auth from ${remoteAddr}`);
+            return ws.send(JSON.stringify({ type: 'error', payload: { error: 'not authenticated' } }));
+          }
+          
+          const promptPlayerId = msg.payload?.promptPlayerId;
+          if (!promptPlayerId || typeof promptPlayerId !== 'string') {
+            return ws.send(JSON.stringify({ type: 'error', payload: { error: 'invalid vote' } }));
+          }
+          
+          try {
+            const allVoted = submitVote(authenticatedPayload.roomId, authenticatedPayload.playerId, promptPlayerId);
+            app.log.info(`Vote submitted: voterId=${authenticatedPayload.playerId}, votedFor=${promptPlayerId}`);
+            
+            // Send confirmation to the voter
+            ws.send(JSON.stringify({ type: 'vote_accepted', payload: { success: true } }));
+            
+            // Broadcast updated vote counts
+            const room = getRoom(authenticatedPayload.roomId);
+            if (room) {
+              const roundData = getRoundWithPrompts(authenticatedPayload.roomId);
+              room.players.forEach((p) => {
+                if (p.socket && p.socket.readyState === p.socket.OPEN) {
+                  p.socket.send(JSON.stringify({
+                    type: 'vote_update',
+                    payload: roundData
+                  }));
+                }
+              });
+              
+              // If all votes are in, tally and announce winner
+              if (allVoted) {
+                const winner = tallyVotes(authenticatedPayload.roomId);
+                app.log.info(`All votes submitted for room ${authenticatedPayload.roomId}, winner: ${winner?.promptPlayerId}`);
+                
+                if (winner) {
+                  room.players.forEach((p) => {
+                    if (p.socket && p.socket.readyState === p.socket.OPEN) {
+                      p.socket.send(JSON.stringify({
+                        type: 'prompt_selected',
+                        payload: {
+                          promptPlayerId: winner.promptPlayerId,
+                          promptText: winner.text,
+                          votes: winner.votes,
+                          playerName: room.players.find(pl => pl.id === winner.promptPlayerId)?.name || 'Unknown'
+                        }
+                      }));
+                    }
+                  });
+                }
+              }
+            }
+          } catch (e: any) {
+            app.log.error(`Failed to submit vote: ${e.message}`);
+            ws.send(JSON.stringify({ type: 'error', payload: { error: e.message } }));
           }
         }
       } catch (e) {

@@ -170,6 +170,41 @@ public class NetworkManager : MonoBehaviour
                     RoundController.Instance.SetRoundData(currentRoundData);
                 }
                 break;
+            case "prompts_update":
+                // payload: { roundId, actorId, topic, startedAt, minCutoffAt, maxEndAt, prompts: [...] }
+                Debug.Log($"[Network] Prompts update received");
+                currentRoundData = payload as JObject;
+                if (RoundController.Instance != null)
+                {
+                    RoundController.Instance.UpdatePrompts(currentRoundData);
+                }
+                break;
+            case "voting_started":
+                // All prompts submitted, start voting phase
+                Debug.Log($"[Network] Voting started!");
+                currentRoundData = payload as JObject;
+                if (RoundController.Instance != null)
+                {
+                    RoundController.Instance.UpdatePrompts(currentRoundData);
+                    RoundController.Instance.HandleVotingStarted();
+                }
+                break;
+            case "vote_update":
+                // Vote counts updated
+                Debug.Log($"[Network] Vote update received");
+                // Could show real-time vote counts if needed
+                break;
+            case "prompt_selected":
+                // Winning prompt announced
+                Debug.Log($"[Network] Prompt selected!");
+                var promptText = payload?.Value<string>("promptText");
+                var playerName = payload?.Value<string>("playerName");
+                var votes = payload?.Value<int>("votes") ?? 0;
+                if (RoundController.Instance != null)
+                {
+                    RoundController.Instance.HandlePromptSelected(promptText, playerName, votes);
+                }
+                break;
             default:
                 // other message types (cut_vote_update, etc.) are ignored by UI controller
                 Debug.Log($"[Network] Unhandled or UI-ignored message type {type}");
