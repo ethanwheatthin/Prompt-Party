@@ -200,8 +200,22 @@ public class NetworkManager : MonoBehaviour
                 var promptText = payload?.Value<string>("promptText");
                 var playerName = payload?.Value<string>("playerName");
                 var votes = payload?.Value<int>("votes") ?? 0;
+                var actorName = payload?.Value<string>("actorName");
+                var selectedTopic = payload?.Value<string>("topic");
                 if (RoundController.Instance != null)
                 {
+                    // Store actor name and topic in current round data if available
+                    if (currentRoundData != null)
+                    {
+                        if (!string.IsNullOrEmpty(actorName))
+                        {
+                            currentRoundData["actorName"] = actorName;
+                        }
+                        if (!string.IsNullOrEmpty(selectedTopic))
+                        {
+                            currentRoundData["topic"] = selectedTopic;
+                        }
+                    }
                     RoundController.Instance.HandlePromptSelected(promptText, playerName, votes);
                 }
                 break;

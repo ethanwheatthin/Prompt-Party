@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using TMPro;
 using Newtonsoft.Json.Linq;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 
 public class RoundController : MonoBehaviour
@@ -21,10 +22,22 @@ public class RoundController : MonoBehaviour
     public GameObject promptItemPrefab; // Prefab with text to show each prompt
     public TextMeshProUGUI promptCountText; // Shows "X/Y prompts submitted"
 
+    [Header("Splash Screen")]
+    public GameObject splashScreenPanel;
+    public TextMeshProUGUI splashTitleText;
+    public TextMeshProUGUI splashSubtitleText;
+
     [Header("Voting Display")]
     public GameObject votingPanel; // Panel shown during voting
     public TextMeshProUGUI votingStatusText;
-    public TextMeshProUGUI selectedPromptText; // Shows the winning prompt
+    public TextMeshProUGUI votingTimerText;
+
+    [Header("Results Display")]
+    public GameObject resultsPanel;
+    public TextMeshProUGUI resultsTopicText;
+    public TextMeshProUGUI resultsPromptText;
+    public TextMeshProUGUI resultsAuthorText;
+    public TextMeshProUGUI resultsActorText;
 
     [Header("Round Data")]
     private string roundId;
@@ -33,6 +46,7 @@ public class RoundController : MonoBehaviour
     private long startedAt;
     private long minCutoffAt;
     private long maxEndAt;
+    private long votingEndTime;
     private List<PromptData> prompts = new List<PromptData>();
     private bool allPromptsSubmitted = false;
     private bool votingStarted = false;
@@ -65,6 +79,21 @@ public class RoundController : MonoBehaviour
             actorBanner.SetActive(false);
         }
 
+        if (splashScreenPanel != null)
+        {
+            splashScreenPanel.SetActive(false);
+        }
+
+        if (votingPanel != null)
+        {
+            votingPanel.SetActive(false);
+        }
+
+        if (resultsPanel != null)
+        {
+            resultsPanel.SetActive(false);
+        }
+
         if (statusText != null)
         {
             statusText.text = "Waiting for round data...";
@@ -83,9 +112,14 @@ public class RoundController : MonoBehaviour
 
     private void Update()
     {
-        if (maxEndAt > 0)
+        if (maxEndAt > 0 && !votingStarted)
         {
             UpdateTimer();
+        }
+
+        if (votingStarted && votingEndTime > 0)
+        {
+            UpdateVotingTimer();
         }
     }
 
@@ -236,6 +270,31 @@ public class RoundController : MonoBehaviour
         votingStarted = true;
         Debug.Log("[RoundController] Voting phase started!");
 
+        StartCoroutine(ShowSplashAndStartVoting());
+    }
+
+    private IEnumerator ShowSplashAndStartVoting()
+    {
+        if (splashScreenPanel != null)
+        {
+            splashScreenPanel.SetActive(true);
+            if (splashTitleText != null)
+            {
+                splashTitleText.text = "? All Prompts Submitted! ?";
+            }
+            if (splashSubtitleText != null)
+            {
+                splashSubtitleText.text = "Get ready to vote...";
+            }
+        }
+
+        yield return new WaitForSeconds(5f);
+
+        if (splashScreenPanel != null)
+        {
+            splashScreenPanel.SetActive(false);
+        }
+
         if (votingPanel != null)
         {
             votingPanel.SetActive(true);
@@ -246,8 +305,44 @@ public class RoundController : MonoBehaviour
             votingStatusText.text = "Players are voting...";
         }
 
+        votingEndTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 60000;
+
         // Refresh display to show revealed prompts
         DisplayPrompts();
+    }
+
+    private void UpdateVotingTimer()
+    {
+        if (votingTimerText == null) return;
+
+        long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        long timeRemaining = votingEndTime - now;
+
+        if (timeRemaining <= 0)
+        {
+            votingTimerText.text = "0:00";
+            votingTimerText.color = Color.red;
+            return;
+        }
+
+        int seconds = (int)(timeRemaining / 1000);
+        int minutes = seconds / 60;
+        seconds = seconds % 60;
+
+        votingTimerText.text = $"{minutes}:{seconds:D2}";
+
+        if (timeRemaining <= 10000)
+        {
+            votingTimerText.color = Color.red;
+        }
+        else if (timeRemaining <= 30000)
+        {
+            votingTimerText.color = new Color(1f, 0.6f, 0f);
+        }
+        else
+        {
+            votingTimerText.color = new Color(0.35f, 0.4f, 0.85f);
+        }
     }
 
     public void HandlePromptSelected(string promptText, string playerName, int votes)
@@ -255,9 +350,35 @@ public class RoundController : MonoBehaviour
         promptSelected = true;
         Debug.Log($"[RoundController] Prompt selected: {promptText} by {playerName}");
 
-        if (selectedPromptText != null)
+        if (votingPanel != null)
         {
-            selectedPromptText.text = $"Selected: \"{promptText}\"\n by {playerName} ({votes} vote{(votes != 1 ? "s" : "")})";
+            votingPanel.SetActive(false);
+        }
+
+        if (resultsPanel != null)
+        {
+            resultsPanel.SetActive(true);
+        }
+
+        if (resultsTopicText != null)
+        {
+            resultsTopicText.text = $"Topic: \"{topic}\"";
+        }
+
+        if (resultsPromptText != null)
+        {
+            resultsPromptText.text = $"\"{promptText}\"";
+        }
+
+        if (resultsAuthorText != null)
+        {
+            resultsAuthorText.text = $"by {playerName} • {votes} vote{(votes != 1 ? "s" : "")}";
+        }
+
+        if (resultsActorText != null)
+        {
+            string actorName = actorNameText != null ? actorNameText.text : $"Actor: {actorId.Substring(0, 8)}...";
+            resultsActorText.text = actorName;
         }
 
         if (statusText != null)

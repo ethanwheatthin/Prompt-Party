@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>PromptParty � Join</title>
+  <title>PromptParty – Join</title>
   <style>
     html,body{height:100%;margin:0;font-family:system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial}
     body{display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#667eea,#764ba2);padding:20px}
@@ -22,6 +22,42 @@
     .dot.offline{background:#9ca3af}
     .small{font-size:13px;color:#444}
     .center{text-align:center}
+    
+    /* Splash Screen Styles */
+    .splash-screen{
+      position:fixed;
+      top:0;left:0;right:0;bottom:0;
+      background:linear-gradient(135deg,#16a34a,#059669);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      z-index:1000;
+      animation:splashFadeIn 0.5s ease-out;
+    }
+    @keyframes splashFadeIn{
+      from{opacity:0;transform:scale(0.9)}
+      to{opacity:1;transform:scale(1)}
+    }
+    .splash-content{
+      text-align:center;
+      color:white;
+      padding:40px;
+    }
+    .splash-title{
+      font-size:48px;
+      font-weight:700;
+      margin-bottom:20px;
+      text-shadow:0 4px 8px rgba(0,0,0,0.3);
+      animation:pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse{
+      0%,100%{transform:scale(1)}
+      50%{transform:scale(1.05)}
+    }
+    .splash-subtitle{
+      font-size:24px;
+      opacity:0.9;
+    }
   </style>
 </head>
 <body>
@@ -66,14 +102,17 @@
       
       <div id="votingArea" style="display:none;margin-top:20px">
         <h3 style="text-align:center;margin-bottom:15px">Vote for the Best Prompt!</h3>
+        <div id="votingTimer" style="text-align:center;font-size:32px;font-weight:700;color:#5a67d8;margin-bottom:20px">1:00</div>
         <div id="promptsList"></div>
         <div id="votingMessage"></div>
       </div>
       
       <div id="selectedPromptArea" style="display:none;margin-top:20px;text-align:center">
-        <h3 style="color:#16a34a">Winning Prompt!</h3>
-        <div id="selectedPromptText" style="font-size:18px;font-weight:600;padding:15px;background:#ecfdf5;border-radius:8px;margin:10px 0"></div>
-        <div id="selectedPromptAuthor" style="color:#666"></div>
+        <h3 style="color:#16a34a;margin-bottom:10px">🏆 Winning Prompt!</h3>
+        <div id="resultsTopic" style="font-size:14px;color:#666;margin-bottom:15px"></div>
+        <div id="selectedPromptText" style="font-size:18px;font-weight:600;padding:20px;background:#ecfdf5;border-radius:8px;margin:15px 0;border:2px solid #16a34a"></div>
+        <div id="selectedPromptAuthor" style="color:#666;font-size:16px;margin-bottom:10px"></div>
+        <div id="resultsActor" style="font-size:14px;color:#5a67d8;font-weight:600"></div>
       </div>
     </div>
   </div>
@@ -98,18 +137,23 @@
       const submitPromptBtn = document.getElementById('submitPromptBtn');
       const promptMessage = document.getElementById('promptMessage');
       const votingArea = document.getElementById('votingArea');
+      const votingTimer = document.getElementById('votingTimer');
       const promptsList = document.getElementById('promptsList');
       const votingMessage = document.getElementById('votingMessage');
       const selectedPromptArea = document.getElementById('selectedPromptArea');
       const selectedPromptText = document.getElementById('selectedPromptText');
       const selectedPromptAuthor = document.getElementById('selectedPromptAuthor');
+      const resultsTopic = document.getElementById('resultsTopic');
+      const resultsActor = document.getElementById('resultsActor');
 
       let token = null;
       let playerId = null;
       let ws = null;
       let currentRound = null;
       let timerInterval = null;
+      let votingTimerInterval = null;
       let hasVoted = false;
+      let votingEndTime = null;
 
       // Check for URL parameters for auto-join
       function checkAutoJoin(){
@@ -216,13 +260,13 @@
               submitPromptBtn.disabled = true;
               submitPromptBtn.textContent = 'Submitted!';
               promptInput.disabled = true;
-              setPromptMessage('Prompt submitted successfully!', 'success');
+              setPromptMessage('Prompt submitted successfully! Waiting for others...', 'success');
             } else if(msg.type === 'prompts_update'){
               console.log('Prompts update received:', msg.payload);
               // Could show prompt count or other info here
             } else if(msg.type === 'voting_started'){
               console.log('Voting started:', msg.payload);
-              handleVotingStarted(msg.payload);
+              showSplashScreen(msg.payload);
             } else if(msg.type === 'vote_accepted'){
               console.log('Vote accepted');
               hasVoted = true;
@@ -297,6 +341,34 @@
         startTimer(roundData.maxEndAt);
       }
 
+      function showSplashScreen(roundData){
+        console.log('Showing splash screen for voting transition');
+        
+        // Store round data for later
+        currentRound = roundData;
+        
+        // Create splash screen
+        const splash = document.createElement('div');
+        splash.className = 'splash-screen';
+        splash.innerHTML = `
+          <div class="splash-content">
+            <div class="splash-title">✨ All Prompts Submitted! ✨</div>
+            <div class="splash-subtitle">Get ready to vote...</div>
+          </div>
+        `;
+        document.body.appendChild(splash);
+        
+        // Remove splash after 5 seconds and show voting
+        setTimeout(() => {
+          splash.style.opacity = '0';
+          splash.style.transition = 'opacity 0.5s ease-out';
+          setTimeout(() => {
+            document.body.removeChild(splash);
+            handleVotingStarted(roundData);
+          }, 500);
+        }, 5000);
+      }
+
       function handleVotingStarted(roundData){
         console.log('All prompts submitted, showing voting UI');
         
@@ -306,12 +378,17 @@
         // If actor, just show waiting message
         if(roundData.actorId === playerId){
           actorBanner.style.display = '';
+          actorBanner.textContent = 'You are the actor! Players are voting...';
           votingArea.style.display = 'none';
           return;
         }
         
         // Show voting area
         votingArea.style.display = '';
+        
+        // Start 1-minute voting timer
+        votingEndTime = Date.now() + 60000; // 1 minute from now
+        startVotingTimer();
         
         // Display prompts as vote buttons
         promptsList.innerHTML = '';
@@ -356,6 +433,37 @@
         });
       }
 
+      function startVotingTimer(){
+        if(votingTimerInterval) clearInterval(votingTimerInterval);
+        
+        votingTimerInterval = setInterval(()=>{
+          const now = Date.now();
+          const timeRemaining = votingEndTime - now;
+          
+          if(timeRemaining <= 0){
+            votingTimer.textContent = '0:00';
+            votingTimer.style.color = '#dc2626';
+            clearInterval(votingTimerInterval);
+            return;
+          }
+          
+          const seconds = Math.floor(timeRemaining / 1000);
+          const minutes = Math.floor(seconds / 60);
+          const secs = seconds % 60;
+          
+          votingTimer.textContent = `${minutes}:${secs.toString().padStart(2, '0')}`;
+          
+          // Change color when running low on time
+          if(timeRemaining <= 10000){
+            votingTimer.style.color = '#dc2626';
+          } else if(timeRemaining <= 30000){
+            votingTimer.style.color = '#f59e0b';
+          } else {
+            votingTimer.style.color = '#5a67d8';
+          }
+        }, 100);
+      }
+
       function voteForPrompt(promptPlayerId, cardElement){
         if(hasVoted) return;
         
@@ -386,17 +494,27 @@
       function handlePromptSelected(data){
         console.log('Winning prompt selected:', data);
         
+        // Stop voting timer
+        if(votingTimerInterval) clearInterval(votingTimerInterval);
+        
         // Hide voting area
         votingArea.style.display = 'none';
         actorBanner.style.display = 'none';
         
-        // Show selected prompt
+        // Show selected prompt with topic and actor
         selectedPromptArea.style.display = '';
+        
+        // Get actor name and topic from the message payload
+        const actorName = data.actorName || 'Unknown Actor';
+        const topic = data.topic || currentRound?.topic || 'Unknown Topic';
+        
+        resultsTopic.textContent = `Topic: "${topic}"`;
         selectedPromptText.textContent = `"${data.promptText}"`;
-        selectedPromptAuthor.textContent = `by ${data.playerName} (${data.votes} vote${data.votes !== 1 ? 's' : ''})`;
+        selectedPromptAuthor.textContent = `by ${data.playerName} • ${data.votes} vote${data.votes !== 1 ? 's' : ''}`;
+        resultsActor.textContent = `Actor: ${actorName}`;
         
         if(data.promptPlayerId === playerId){
-          selectedPromptAuthor.innerHTML += '<br><strong style="color:#16a34a">Your prompt won!</strong>';
+          selectedPromptAuthor.innerHTML += '<br><strong style="color:#16a34a">🎉 Your prompt won! 🎉</strong>';
         }
       }
 

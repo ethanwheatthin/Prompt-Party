@@ -94,7 +94,7 @@ export function setupWebsocket(app: FastifyInstance) {
           }
           
           const promptText = msg.payload?.prompt;
-          if (!promptText || typeof promptText !== 'string') {
+          if (!promptText || typeof promptText !== 'string' ) {
             return ws.send(JSON.stringify({ type: 'error', payload: { error: 'invalid prompt' } }));
           }
           
@@ -181,7 +181,10 @@ export function setupWebsocket(app: FastifyInstance) {
                           promptPlayerId: winner.promptPlayerId,
                           promptText: winner.text,
                           votes: winner.votes,
-                          playerName: room.players.find(pl => pl.id === winner.promptPlayerId)?.name || 'Unknown'
+                          playerName: room.players.find(pl => pl.id === winner.promptPlayerId)?.name || 'Unknown',
+                          actorId: room.currentRound?.actorId,
+                          actorName: room.players.find(pl => pl.id === room.currentRound?.actorId)?.name || 'Unknown',
+                          topic: room.currentRound?.topic || 'Unknown'
                         }
                       }));
                     }
