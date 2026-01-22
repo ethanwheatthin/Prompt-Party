@@ -18,7 +18,7 @@ public class DevHelper : MonoBehaviour
     [Header("UI (Optional - for button in scene)")]
     public Button seedPlayersButton;
 
-    private string currentJoinCode;
+    public Text currentJoinCode;
 
     private void Start()
     {
@@ -29,32 +29,10 @@ public class DevHelper : MonoBehaviour
         }
 
         // Monitor for room code changes
-        InvokeRepeating(nameof(CheckForJoinCode), 1f, 1f);
+        //InvokeRepeating(nameof(CheckForJoinCode), 1f, 1f);
     }
 
-    private void CheckForJoinCode()
-    {
-        if (RoomStateController.Instance != null && RoomStateController.Instance.roomCodeText != null)
-        {
-            string displayText = RoomStateController.Instance.roomCodeText.text;
-            // Extract just the code (format is "Room: PPXXXXXX")
-            if (displayText.Contains("Room: "))
-            {
-                string code = displayText.Replace("Room: ", "").Trim();
-                if (!string.IsNullOrEmpty(code) && code.StartsWith("PP") && code.Length == 8 && code != currentJoinCode)
-                {
-                    currentJoinCode = code;
-                    Debug.Log($"[DevHelper] Detected room code: {currentJoinCode}");
-                    
-                    // Enable button if it exists
-                    if (seedPlayersButton != null)
-                    {
-                        seedPlayersButton.interactable = true;
-                    }
-                }
-            }
-        }
-    }
+    
 
     /// <summary>
     /// Open browser tabs with test players
@@ -63,19 +41,19 @@ public class DevHelper : MonoBehaviour
     [ContextMenu("Seed Test Players")]
     public void SeedTestPlayers()
     {
-        if (string.IsNullOrEmpty(currentJoinCode))
+        if (string.IsNullOrEmpty(currentJoinCode.text))
         {
             Debug.LogWarning("[DevHelper] No join code available yet. Create a room first!");
             return;
         }
 
         int playersToCreate = Mathf.Min(numberOfPlayers, playerNames.Length);
-        Debug.Log($"[DevHelper] Opening {playersToCreate} browser tabs with test players for room {currentJoinCode}...");
+        Debug.Log($"[DevHelper] Opening {playersToCreate} browser tabs with test players for room {currentJoinCode.text}...");
 
         for (int i = 0; i < playersToCreate; i++)
         {
             string playerName = playerNames[i];
-            string url = $"{backendUrl}/player.html?code={currentJoinCode}&name={UnityEngine.Networking.UnityWebRequest.EscapeURL(playerName)}&autoJoin=true";
+            string url = $"{backendUrl}/player.html?code={currentJoinCode.text}&name={UnityEngine.Networking.UnityWebRequest.EscapeURL(playerName)}&autoJoin=true";
             
             OpenBrowser(url);
             Debug.Log($"[DevHelper] Opening browser for player: {playerName}");
@@ -116,9 +94,9 @@ public class DevHelper : MonoBehaviour
         
         GUILayout.Label("Dev Helper (Editor Only)", GUI.skin.box);
         
-        if (!string.IsNullOrEmpty(currentJoinCode))
+        if (!string.IsNullOrEmpty(currentJoinCode.text))
         {
-            GUILayout.Label($"Room Code: {currentJoinCode}");
+            GUILayout.Label($"Room Code: {currentJoinCode.text}");
             
             if (GUILayout.Button("Seed Test Players", GUILayout.Height(40)))
             {

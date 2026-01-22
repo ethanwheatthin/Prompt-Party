@@ -15,6 +15,12 @@ public class RoomStateController : MonoBehaviour
     public GameObject playerListItemPrefab; // prefab with a Text component
     public Transform playersListContent; // parent transform for instantiated rows
 
+    [Header("QR Code")]
+    private QRFromServer qrFetcher; // optional: assign to display backend-generated QR
+    public string backendHost = "http://localhost:3000";
+
+    private string currentJoinCode;
+
     private void Awake()
     {
         if (Instance != null && Instance != this) { Destroy(this.gameObject); return; }
@@ -24,8 +30,9 @@ public class RoomStateController : MonoBehaviour
     private void Start()
     {
         // Generate a simple room code at startup and set it on the UI
-        var joinCode = GenerateJoinCode(6);
-        SetJoinCode(joinCode);
+        //var joinCode = GenerateJoinCode(6);
+        //SetJoinCode(joinCode);
+        qrFetcher = gameObject.AddComponent<QRFromServer>();
     }
 
     private string GenerateJoinCode(int length)
@@ -40,9 +47,24 @@ public class RoomStateController : MonoBehaviour
     public void SetJoinCode(string joinCode)
     {
         if (string.IsNullOrEmpty(joinCode)) return;
-        if (roomCodeText != null)
+        
+        // Only update if the join code has changed
+        if (currentJoinCode != joinCode)
         {
-            roomCodeText.text = $"Room: {joinCode}";
+            currentJoinCode = joinCode;
+            
+            if (roomCodeText != null)
+            {
+                roomCodeText.text = $"Room: {joinCode}";
+            }
+
+            // Generate QR code when join code is set
+            if (qrFetcher != null && !string.IsNullOrEmpty(backendHost))
+            {
+                qrFetcher.backendHost = backendHost;
+                qrFetcher.GenerateForRoom(joinCode);
+                Debug.Log($"[RoomStateController] Generating QR code for room: {joinCode}");
+            }
         }
     }
 
